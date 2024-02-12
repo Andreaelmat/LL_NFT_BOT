@@ -18,10 +18,19 @@ This Telegram bot is designed to notify users about newly listed NFTs (Non-Fungi
 - Selenium WebDriver
 - ChromeDriver (for headless browsing)
 
-## Setup and Installation
 
-1. **Clone the repository**:
+# 2. Install dependencies:
+Make sure you have Python 3 installed on your system. Then, install the required Python packages:
 
-```bash
-git clone https://github.com/yourusername/LL_NFT_BOT.git
-cd LL_NFT_BOT
+python-telegram-bot
+selenium
+ChromeDriver
+
+# 3. Telegram Bot Token:
+Replace TOKEN_TELEGRAM in the script with your actual Telegram Bot Token obtained from BotFather.
+
+
+# 4. Start interacting with your bot on Telegram using the following commands:
+
+/start - Welcome message and instructions.
+/setprice <price> - Set a price limit for NFT listings.
