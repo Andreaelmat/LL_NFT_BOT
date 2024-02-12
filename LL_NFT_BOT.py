@@ -8,19 +8,17 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import re
+import time
 import asyncio
 
-TELEGRAM_TOKEN = 'TOKEN_TELEGRAM'
+TELEGRAM_TOKEN = 'TELEGRAM_TOKEN'
 
-# Variabile prezzo
 desired_prices = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_message = (
-        "Benvenuto al bot di notifica degli NFT dei LL! 🎉\n"
-        "Per iniziare, ti chiedo di impostare un prezzo massimo per i LL.\n"
-        "Usa il comando /setprice seguito da un valore numerico. Esempio: /setprice 500 \n"
-        "Questo imposterà il tuo prezzo di interesse a $500 e riceverai notifiche per gli NFT listati al di sotto di questo prezzo."
+        "Benvenuto al bot di notifica degli NFT! 🎉\n"
+        "Per iniziare, imposta un prezzo massimo per gli NFT che ti interessano con /setprice."
     )
     await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_message)
 
@@ -32,10 +30,9 @@ async def set_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id = update.effective_chat.id
             desired_prices[chat_id] = {'price': price, 'nfts': []}
             await context.bot.send_message(chat_id=chat_id, text=f"Il prezzo è stato impostato a: ${price}. Vedrai subito gli ultimi list e poi aggiornato ogni 5 minuti!")
-            # Chiama subito la funzione per controllare nuovi NFT listati
             await scrape_nfts(chat_id, price, context)
         except ValueError:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="Per favore, inserisci un numero valido.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Inserisci un numero valido.")
     else:
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Usa: /setprice <prezzo>")
 
@@ -55,23 +52,34 @@ async def scrape_nfts(chat_id: int, price_limit: float, context: ContextTypes.DE
     except TimeoutException:
         print("Il pulsante per accettare i cookie non è stato trovato o non è necessario cliccarlo.")
 
+    # Implementazione dello scrolling infinito
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)  # Attendi che la pagina carichi
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
 
-    wait.until(EC.visibility_of_all_elements_located((By.CSS_SELECTOR, 'a.css-1rdp2dl')))
     link_elements = driver.find_elements(By.CSS_SELECTOR, 'a.css-1rdp2dl')
-
     messages = []
-    for link_element in link_elements[:5]:  # Controlla solo i primi 5 per efficienza
-        title_element = link_element.find_element(By.CLASS_NAME, 'css-cd6wvw')
-        price_element = link_element.find_element(By.CLASS_NAME, 'css-15y6ahk')
-        title_text = title_element.text.strip()
-        price_text = re.sub(r'[^\d.]', '', price_element.text.strip())
-        if 'K' in price_element.text.strip():
-            price_value = float(price_text) * 1000
-        else:
-            price_value = float(price_text)
-        if price_value <= price_limit:
-            link_url = link_element.get_attribute('href')
-            messages.append(f"{title_text} Prezzo List: ${price_value} - Link: {link_url}")
+    for link_element in link_elements[:5]:  # Limita a 5 
+        try:
+            title_element = link_element.find_element(By.CLASS_NAME, 'css-cd6wvw')
+            price_element = link_element.find_element(By.CLASS_NAME, 'css-15y6ahk')
+            title_text = title_element.text.strip()
+            price_text = re.sub(r'[^\d.]', '', price_element.text.strip())
+            if 'K' in price_element.text.strip():
+                price_value = float(price_text) * 1000
+            else:
+                price_value = float(price_text)
+            if price_value <= price_limit:
+                link_url = link_element.get_attribute('href')
+                messages.append(f"{title_text} Prezzo List: ${price_value} - Link: {link_url}")
+        except Exception as e:
+            print(f"Errore durante lo scraping di un elemento: {e}")
+
     driver.quit()
 
     if messages:
@@ -79,15 +87,13 @@ async def scrape_nfts(chat_id: int, price_limit: float, context: ContextTypes.DE
     else:
         await context.bot.send_message(chat_id=chat_id, text="Nessun NFT trovato sotto il prezzo impostato.")
 
-
 def main() -> None:
     application = Application.builder().token(TELEGRAM_TOKEN).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("setprice", set_price))
-
 
     application.run_polling()
 
 if __name__ == '__main__':
     main()
+
